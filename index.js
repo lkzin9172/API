@@ -19,7 +19,7 @@ const bancoChaves = {
 };
 
 app.get('/', (req, res) => {
-  res.json({ status: "API rodando perfeitamente!" });
+  return res.json({ status: "API rodando perfeitamente!" });
 });
 
 app.post('/api/license/validate', (req, res) => {
