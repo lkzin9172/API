@@ -28,11 +28,11 @@ app.get('/', (req, res) => {
   res.json({ status: 'API rodando perfeitamente!' });
 });
 
-// Rota para validar a chave (O app chama essa rota) - Mantida e com suporte a device_id e status
+// Rota para validar a chave (O app chama essa rota)
 app.post('/api/license/validate', (req, res) => {
   const { key, chave, device_id, deviceId } = req.body;
-  const keyInformada = key || chave; // Aceita 'key' ou 'chave' no corpo da requisição
-  const idDispositivo = device_id || deviceId; // Aceita qualquer variação do ID do aparelho
+  const keyInformada = key || chave; 
+  const idDispositivo = device_id || deviceId; 
 
   if (!keyInformada) {
     return res.status(400).json({ 
@@ -58,6 +58,19 @@ app.post('/api/license/validate', (req, res) => {
     return res.status(403).json({ valid: false, message: 'Esta chave foi desativada permanentemente.' });
   }
 
+  // Lógica de cálculo de expiração (Validade)
+  const dataCriacao = new Date(licenca.criadoEm);
+  const dataAtual = new Date();
+  const diferencaTempo = dataAtual - dataCriacao;
+  const diasDecorridos = diferencaTempo / (1000 * 60 * 60 * 24);
+
+  if (diasDecorridos > licenca.diasValidade) {
+    return res.status(401).json({ 
+      valid: false, 
+      message: 'Sua chave expirou.' 
+    });
+  }
+
   // Lógica de Vínculo de Dispositivo único (1 Key = 1 Aparelho)
   if (idDispositivo) {
     if (licenca.device_id) {
@@ -73,19 +86,6 @@ app.post('/api/license/validate', (req, res) => {
     }
   }
 
-  // Lógica de cálculo de expiração
-  const dataCriacao = new Date(licenca.criadoEm);
-  const dataAtual = new Date();
-  const diferencaTempo = dataAtual - dataCriacao;
-  const diasDecorridos = diferencaTempo / (1000 * 60 * 60 * 24);
-
-  if (diasDecorridos > licenca.diasValidade) {
-    return res.status(401).json({ 
-      valid: false, 
-      message: 'Sua chave expirou.' 
-    });
-  }
-
   const diasRestantes = Math.ceil(licenca.diasValidade - diasDecorridos);
 
   return res.json({ 
@@ -94,12 +94,12 @@ app.post('/api/license/validate', (req, res) => {
   });
 });
 
-// Adicionado alias para '/api/license/verify' caso o APK chame essa rota também
+// Rota padrão exigida pelo APK (/api/license/verify)
 app.post('/api/license/verify', (req, res) => {
   return app._router.handle(Object.assign(req, { url: '/api/license/validate', method: 'POST' }), res);
 });
 
-// Rota para você criar novas chaves (Exemplo de uso: enviar key e dias no JSON)
+// Rota para você criar novas chaves
 app.post('/api/license/create', (req, res) => {
   const { key, dias } = req.body;
 
@@ -120,7 +120,7 @@ app.post('/api/license/create', (req, res) => {
   });
 });
 
-// Adicionado: Rota para Pausar a Key
+// Rota para Pausar a Key
 app.post('/api/license/pause', (req, res) => {
   const { key, chave } = req.body;
   const keyInformada = key || chave;
@@ -133,7 +133,7 @@ app.post('/api/license/pause', (req, res) => {
   return res.json({ sucesso: true, mensagem: 'Chave pausada com sucesso!' });
 });
 
-// Adicionado: Rota para Desativar a Key
+// Rota para Desativar a Key
 app.post('/api/license/disable', (req, res) => {
   const { key, chave } = req.body;
   const keyInformada = key || chave;
