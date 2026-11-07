@@ -22,6 +22,19 @@ app.get('/', (req, res) => {
   return res.json({ status: "API rodando perfeitamente!" });
 });
 
+app.post('/api/license/create', (req, res) => {
+  const { key, dias } = req.body;
+  if (!key || !dias) {
+    return res.status(400).json({ success: false, message: "Dados incompletos." });
+  }
+  bancoChaves[key] = {
+    diasValidade: dias,
+    criadoEm: new Date().toISOString(),
+    deviceId: null
+  };
+  return res.json({ sucesso: true, mensagem: `Chave ${key} criada com sucesso.` });
+});
+
 app.post('/api/license/validate', (req, res) => {
   const { key, deviceId } = req.body;
   const keyInformativa = key;
