@@ -5,87 +5,86 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Banco de dados em memória (Armazena as chaves, dias de validade e data de criação)
+// Banco de dados em memória (armazenas as chaves, dias de validade e o deviceId vinculado)
 const bancoChaves = {
-  // Exemplo de chave criada com 30 dias de validade
-  "CHAVE-VIP-30DIAS": {
-    diasValidade: 30,
-    criadoEm: new Date().toISOString()
-  },
-  // Exemplo de chave criada com 7 dias de validade
-  "TESTE-7DIAS": {
-    diasValidade: 7,
-    criadoEm: new Date().toISOString()
-  }
+    // Exemplo de chave criada com 30 dias de validade
+    "CHAVE-VIP-30DIAS": {
+        diasValidade: 30,
+        criadoEm: new Date().toISOString(),
+        deviceId: null // Vinculado no primeiro acesso
+    },
+    // Exemplo de chave criada com 7 dias de validade
+    "TESTE-7DIAS": {
+        diasValidade: 7,
+        criadoEm: new Date().toISOString(),
+        deviceId: null // Vinculado no primeiro acesso
+    }
 };
 
 // Rota inicial de teste
 app.get('/', (req, res) => {
-  res.json({ status: 'API rodando perfeitamente!' });
-});
+    res.json({ status: 'API rodando perfeitamente!' });
+};
 
-// Rota para validar a chave (O app chama essa rota)
+// Rota para validar a chave e vincular ao dispositivo
 app.post('/api/license/validate', (req, res) => {
-  const { key, chave } = req.body;
-  const keyInformada = key || chave; // Aceita 'key' ou 'chave' no corpo da requisição
+    const { key, deviceId } = req.body;
+    const keyInformativa = key; // Aceita 'key' ou 'chave'
 
-  if (!keyInformada) {
-    return res.status(400).json({ 
-      valid: false, 
-      message: 'Nenhuma chave foi fornecida.' 
+    if (!keyInformativa) {
+        return res.status(400).json({
+            valid: false,
+            message: "Nenhuma chave foi fornecida."
+        });
+    }
+
+    if (!deviceId) {
+        return res.status(400).json({
+            valid: false,
+            message: "Nenhum ID de dispositivo fornecido."
+        });
+    }
+
+    const licenca = bancoChaves[keyInformativa];
+
+    if (!licenca) {
+        return res.status(400).json({
+            valid: false,
+            message: "Chave inválida ou não encontrada."
+        });
+    }
+
+    // Se a chave ainda não tem um dispositivo vinculado, vincula o atual
+    if (!licenca.deviceId) {
+        licenca.deviceId = deviceId;
+    } 
+    // Se já tiver um dispositivo vinculado e for diferente, bloqueia o acesso
+    else if (licenca.deviceId !== deviceId) {
+        return res.status(400).json({
+            valid: false,
+            message: "Esta chave já está sendo usada em outro dispositivo!"
+        });
+    }
+
+    // Lógica de cálculo de expiração
+    const dataCriacao = new Date(licenca.criadoEm);
+    const dataAtual = new Date();
+    const diferenca = (dataAtual - dataCriacao) / (1000 * 60 * 60 * 24); // dias
+
+    if (diferenca > licenca.diasValidade) {
+        return res.status(400).json({
+            valid: false,
+            message: "Chave expirada!"
+        });
+    }
+
+    return res.json({
+        valid: true,
+        message: "Acesso liberado!"
     });
-  }
-
-  const licenca = bancoChaves[keyInformada];
-
-  if (!licenca) {
-    return res.status(401).json({ 
-      valid: false, 
-      message: 'Chave inválida ou não encontrada.' 
-    });
-  }
-
-  // Lógica de cálculo de expiração
-  const dataCriacao = new Date(licenca.criadoEm);
-  const dataAtual = new Date();
-  const diferencaTempo = dataAtual - dataCriacao;
-  const diasDecorridos = diferencaTempo / (1000 * 60 * 60 * 24);
-
-  if (diasDecorridos > licenca.diasValidade) {
-    return res.status(401).json({ 
-      valid: false, 
-      message: 'Sua chave expirou.' 
-    });
-  }
-
-  const diasRestantes = Math.ceil(licenca.diasValidade - diasDecorridos);
-
-  return res.json({ 
-    valid: true, 
-    message: `Acesso liberado! Restam ${diasRestantes} dia(s).` 
-  });
-});
-
-// Rota para você criar novas chaves (Exemplo de uso: enviar key e dias no JSON)
-app.post('/api/license/create', (req, res) => {
-  const { key, dias } = req.body;
-
-  if (!key || !dias) {
-    return res.status(400).json({ erro: 'Informe a chave (key) e os dias de validade (dias).' });
-  }
-
-  bancoChaves[key] = {
-    diasValidade: Number(dias),
-    criadoEm: new Date().toISOString()
-  };
-
-  return res.json({ 
-    sucesso: true, 
-    mensagem: `Chave '${key}' criada com sucesso por ${dias} dias!` 
-  });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+    console.log(`Servidor rodando na porta ${PORT}`);
 });
