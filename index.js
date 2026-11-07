@@ -27,7 +27,6 @@ app.post('/api/license/create', (req, res) => {
         mensagem: 'Licença criada com sucesso!',
         dados: { key, dias }
     });
-});
 
 app.post('/api/license/verify', (req, res) => {
     const { key, deviceId } = req.body;
