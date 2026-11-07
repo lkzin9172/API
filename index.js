@@ -1,96 +1,73 @@
 const express = require('express');
-const cors = require('cors');
-
 const app = express();
+
 app.use(express.json());
-app.use(cors());
 
-const bancoChaves = {
-  "CHAVE-VIP-30DIAS": {
-    diasValidade: 30,
-    criadoEm: new Date().toISOString(),
-    deviceId: null
-  },
-  "TESTE-7DIAS": {
-    diasValidade: 7,
-    criadoEm: new Date().toISOString(),
-    deviceId: null
-  }
-};
+// Banco de dados em memória para exemplo (pode substituir por um banco real ou arquivo)
+const licenses = new Map();
 
-app.get('/', (req, res) => {
-  return res.json({ status: "API rodando perfeitamente!" });
-});
-
+// Rota POST para criar a licença
 app.post('/api/license/create', (req, res) => {
-  const { key, dias } = req.body;
-  if (!key || !dias) {
-    return res.status(400).json({ success: false, message: "Dados incompletos." });
-  }
-  bancoChaves[key] = {
-    diasValidade: dias,
-    criadoEm: new Date().toISOString(),
-    deviceId: null
-  };
-  return res.json({ sucesso: true, mensagem: `Chave ${key} criada com sucesso.` });
+    const { key, dias } = req.body;
+
+    if (!key || !dias) {
+        return res.status(400).json({ sucesso: false, mensagem: 'Chave e dias são obrigatórios!' });
+    }
+
+    if (licenses.has(key)) {
+        return res.status(400).json({ sucesso: false, mensagem: 'Essa chave já existe!' });
+    }
+
+    // Salva a licença com o deviceId vazio (ainda não vinculada)
+    licenses.set(key, {
+        dias: dias,
+        deviceId: null,
+        criadoEm: new Date()
+    });
+
+    return res.status(201).json({
+        sucesso: true,
+        mensagem: 'Licença criada com sucesso!',
+        dados: { key, dias }
+    });
 });
 
-app.post('/api/license/validate', (req, res) => {
-  const { key, deviceId } = req.body;
-  const keyInformativa = key;
+// Rota POST para validar/ativar a licença no celular
+app.post('/api/license/verify', (req, res) => {
+    const { key, deviceId } = req.body;
 
-  if (!keyInformativa) {
-    return res.status(400).json({
-      success: false,
-      message: "Nenhuma chave foi fornecida."
+    if (!key || !deviceId) {
+        return res.status(400).json({ sucesso: false, mensagem: 'Chave e ID do dispositivo são obrigatórios!' });
+    }
+
+    const license = licenses.get(key);
+
+    if (!license) {
+        return res.status(404).json({ sucesso: false, mensagem: 'Chave inválida!' });
+    }
+
+    // Se a chave já está vinculada a outro celular
+    if (license.deviceId && license.deviceId !== deviceId) {
+        return res.status(403).json({ 
+            sucesso: false, 
+            mensagem: 'Erro: Esta chave já está ativada em outro dispositivo e não pode ser transferida!' 
+        });
+    }
+
+    // Se é o primeiro acesso, vincula permanentemente a este celular
+    if (!license.deviceId) {
+        license.deviceId = deviceId;
+    }
+
+    return res.json({
+        sucesso: true,
+        mensagem: 'Licença autorizada com sucesso!',
+        dias: license.dias,
+        deviceIdVinculado: license.deviceId
     });
-  }
-
-  if (!deviceId) {
-    return res.status(400).json({
-      success: false,
-      message: "Nenhum ID de dispositivo fornecido."
-    });
-  }
-
-  const chaveDados = bancoChaves[keyInformativa];
-
-  if (!chaveDados) {
-    return res.status(404).json({
-      success: false,
-      message: "Chave inválida."
-    });
-  }
-
-  if (chaveDados.deviceId && chaveDados.deviceId !== deviceId) {
-    return res.status(403).json({
-      success: false,
-      message: "Esta chave já está em uso em outro dispositivo."
-    });
-  }
-
-  if (!chaveDados.deviceId) {
-    chaveDados.deviceId = deviceId;
-  }
-
-  const dataCriacao = new Date(chaveDados.criadoEm);
-  const dataExpiracao = new Date(dataCriacao.getTime() + (chaveDados.diasValidade * 24 * 60 * 60 * 1000));
-  const agora = new Date();
-
-  if (agora > dataExpiracao) {
-    return res.status(403).json({
-      success: false,
-      message: "Chave expirada!"
-    });
-  }
-
-  return res.json({
-    success: true,
-    message: "Acesso liberado!"
-  });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+    console.log(`Servidor rodando na porta ${PORT}`);
 });
