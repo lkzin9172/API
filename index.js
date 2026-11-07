@@ -23,8 +23,8 @@ app.post('/api/license/create', (req, res) => {
         dias: dias,
         deviceId: null,
         criadoEm: new Date()
-    });
-
+    
+    },
     return res.status(201).json({
         sucesso: true,
         mensagem: 'Licença criada com sucesso!',
