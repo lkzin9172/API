@@ -58,7 +58,7 @@ app.post('/api/license/validate', (req, res) => {
 
   if (!chaveDados.deviceId) {
     chaveDados.deviceId = deviceId;
-  }
+  })
 
   const dataCriacao = new Date(chaveDados.criadoEm);
   const dataExpiracao = new Date(dataCriacao.getTime() + (chaveDados.diasValidade * 24 * 60 * 60 * 1000));
