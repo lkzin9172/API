@@ -67,22 +67,21 @@ app.post('/api/license/validate', (req, res) => {
     chaveDados.deviceId = deviceId;
   }
 
-  // Calcula a data de expiração com base nos dias de validade
+  // Lógica de cálculo de expiração
   const dataCriacao = new Date(chaveDados.criadoEm);
-  const dataExpiracao = new Date(dataCriacao.getTime() + chaveDados.diasValidade * 24 * 60 * 60 * 1000);
+  const dataExpiracao = new Date(dataCriacao.getTime() + (chaveDados.diasValidade * 24 * 60 * 60 * 1000));
   const agora = new Date();
 
   if (agora > dataExpiracao) {
     return res.status(403).json({
       success: false,
-      message: "Chave expirada."
+      message: "Chave expirada!"
     });
   }
 
   return res.json({
     success: true,
-    message: "Licença validada com sucesso!",
-    expiresAt: dataExpiracao.toISOString()
+    message: "Acesso liberado!"
   });
 });
 
