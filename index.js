@@ -5,31 +5,26 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Banco de dados em memória (armazena as chaves, dias de validade e o deviceId)
 const bancoChaves = {
-  // Exemplo de chave criada com 30 dias de validade
   "CHAVE-VIP-30DIAS": {
     diasValidade: 30,
     criadoEm: new Date().toISOString(),
-    deviceId: null // Vinculado no primeiro acesso
+    deviceId: null
   },
-  // Exemplo de chave criada com 7 dias de validade
-  "TESTE-70IAS": {
+  "TESTE-7DIAS": {
     diasValidade: 7,
     criadoEm: new Date().toISOString(),
-    deviceId: null // Vinculado no primeiro acesso
+    deviceId: null
   }
 };
 
-// Rota inicial de teste
 app.get('/', (req, res) => {
   res.json({ status: "API rodando perfeitamente!" });
 });
 
-// Rota para validar a chave e vincular ao dispositivo
 app.post('/api/license/validate', (req, res) => {
   const { key, deviceId } = req.body;
-  const keyInformativa = key; // Aceita 'key' ou 'chave'
+  const keyInformativa = key;
 
   if (!keyInformativa) {
     return res.status(400).json({
@@ -54,7 +49,6 @@ app.post('/api/license/validate', (req, res) => {
     });
   }
 
-  // Se a chave já tem um deviceId vinculado, verifica se é o mesmo
   if (chaveDados.deviceId && chaveDados.deviceId !== deviceId) {
     return res.status(403).json({
       success: false,
@@ -62,12 +56,10 @@ app.post('/api/license/validate', (req, res) => {
     });
   }
 
-  // Se não tem deviceId vinculado, vincula agora
   if (!chaveDados.deviceId) {
     chaveDados.deviceId = deviceId;
   }
 
-  // Lógica de cálculo de expiração
   const dataCriacao = new Date(chaveDados.criadoEm);
   const dataExpiracao = new Date(dataCriacao.getTime() + (chaveDados.diasValidade * 24 * 60 * 60 * 1000));
   const agora = new Date();
