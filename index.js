@@ -3,17 +3,15 @@ const app = express();
 
 app.use(express.json());
 
-// 1. BANCO DE DADOS DE KEYS (Guarda relógio, expiração e pausa)
+// Única API contendo o Banco de Dados de Keys e o Banco de Dados de Dispositivos na mesma estrutura
 const licenses = new Map();
-
-// 2. BANCO DE DADOS DE DISPOSITIVOS SEPARADO (Guarda estritamente qual deviceId usa qual key: Key -> DeviceId)
 const deviceDatabase = new Map();
 
 app.get('/', (req, res) => {
-    res.status(200).json({ status: 'online', message: 'API rodando perfeitamente!' });
+    res.status(200).json({ status: 'online', message: 'API única rodando perfeitamente!' });
 });
 
-// Rota de Gerar Key
+// 1. GERAR KEY
 app.post('/license/create', (req, res) => {
     try {
         const { key, tempo, tipo, dias } = req.body;
@@ -38,7 +36,6 @@ app.post('/license/create', (req, res) => {
 
         const expiresAt = Date.now() + milissegundos;
 
-        // Salva a key no banco de keys
         licenses.set(key, {
             expiresAt,
             paused: false
@@ -56,7 +53,7 @@ app.post('/license/create', (req, res) => {
     }
 });
 
-// Rota para Pausar / Despausar Key
+// 2. PAUSAR / DESPAUSAR KEY
 app.post('/license/toggle', (req, res) => {
     try {
         const { key, paused } = req.body;
@@ -84,7 +81,7 @@ app.post('/license/toggle', (req, res) => {
     }
 });
 
-// Rota para Desativar / Remover Key e limpar o vínculo do dispositivo
+// 3. DESATIVAR / REMOVER KEY
 app.post('/license/disable', (req, res) => {
     try {
         const { key } = req.body;
@@ -100,7 +97,7 @@ app.post('/license/disable', (req, res) => {
         }
 
         licenses.delete(key);
-        deviceDatabase.delete(key); // Remove também do banco de dispositivos
+        deviceDatabase.delete(key);
 
         return res.status(200).json({
             status: 'success',
@@ -112,7 +109,7 @@ app.post('/license/disable', (req, res) => {
     }
 });
 
-// Rota de Validação (Usa o Banco de Keys para o relógio e o Banco de Dispositivos Separado para travar 1 Key = 1 Aparelho)
+// 4. VALIDAR E SALVAR O ID DO DISPOSITIVO AUTOMATICAMENTE NA PRIMEIRA ENTRADA
 app.post('/license/validate', (req, res) => {
     try {
         const { key, deviceId } = req.body;
@@ -141,15 +138,13 @@ app.post('/license/validate', (req, res) => {
             return res.status(400).json({ status: 'error', message: 'Esta chave expirou!' });
         }
 
-        // BANCO DE DADOS DE DISPOSITIVOS SEPARADO:
-        // Puxa o aparelho registrado para essa key no banco de dispositivos
+        // Vínculo automático de 1 Key para 1 Aparelho
         const registeredDevice = deviceDatabase.get(key);
 
         if (!registeredDevice) {
-            // Se nenhum aparelho usou ainda, salva automaticamente o deviceId atual neste banco separado
+            // Salva automaticamente o ID do dispositivo na primeira vez que ele loga com a Key
             deviceDatabase.set(key, deviceId);
         } else if (registeredDevice !== deviceId) {
-            // Se o aparelho que está tentando entrar for diferente do que está salvo no banco de dispositivos, bloqueia!
             return res.status(400).json({ 
                 status: 'error', 
                 message: 'Esta chave já está vinculada a outro dispositivo!' 
