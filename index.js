@@ -99,7 +99,7 @@ app.post('/license/disable', (req, res) => {
     }
 });
 
-// 4. VALIDAÇÃO PURA POR CHAVE (Sem exigir Device ID)
+// 4. VALIDAÇÃO DINÂMICA VIA SERVIDOR
 app.post('/license/validate', (req, res) => {
     try {
         const { key } = req.body;
@@ -123,8 +123,11 @@ app.post('/license/validate', (req, res) => {
             return res.status(400).json({ status: 'error', message: 'Esta chave expirou!' });
         }
 
+        // Retorna o sucesso completo que o app espera para liberar a navegação
         return res.status(200).json({
             status: 'success',
+            auth: true,
+            action: 'redirect_main',
             message: 'Acesso liberado!',
             expiresAt: licenseData.expiresAt
         });
