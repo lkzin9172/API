@@ -3,23 +3,20 @@ const app = express();
 
 app.use(express.json());
 
-// 1. BANCO DE DADOS DE KEYS (Controla o relógio, expiração e pausa)
+// Banco de dados das chaves
 const licenses = new Map();
 
-// 2. BANCO DE DADOS DE DISPOSITIVOS SEPARADO (Salva automaticamente qual deviceId usou a key)
-const deviceDatabase = new Map();
-
 app.get('/', (req, res) => {
-    res.status(200).json({ status: 'online', message: 'API unificada rodando perfeitamente!' });
+    res.status(200).json({ status: 'online', message: 'API simplificada rodando!' });
 });
 
-// GERAR KEY (Usado no seu painel/bot)
+// 1. GERAR KEY
 app.post('/license/create', (req, res) => {
     try {
         const { key, tempo, tipo, dias } = req.body;
         
         if (!key) {
-            return res.status(400).json({ status: 'error', message: 'Informe a chave (key).' });
+            return res.status(400).json({ status: 'error', message: 'Informe a chave.' });
         }
 
         let milissegundos = 0;
@@ -47,15 +44,14 @@ app.post('/license/create', (req, res) => {
             status: 'success',
             message: 'Chave criada com sucesso!',
             key,
-            expiresAt,
-            expiraEm: `${qtd} ${tipo || 'dias'}`
+            expiresAt
         });
     } catch (error) {
-        return res.status(500).json({ status: 'error', message: 'Erro interno ao criar chave' });
+        return res.status(500).json({ status: 'error', message: 'Erro interno.' });
     }
 });
 
-// PAUSAR / DESPAUSAR KEY
+// 2. PAUSAR / DESPAUSAR KEY
 app.post('/license/toggle', (req, res) => {
     try {
         const { key, paused } = req.body;
@@ -65,7 +61,6 @@ app.post('/license/toggle', (req, res) => {
         }
 
         const licenseData = licenses.get(key);
-        
         if (!licenseData) {
             return res.status(404).json({ status: 'error', message: 'Chave não encontrada.' });
         }
@@ -83,7 +78,7 @@ app.post('/license/toggle', (req, res) => {
     }
 });
 
-// DESATIVAR / REMOVER KEY
+// 3. DESATIVAR / REMOVER KEY
 app.post('/license/disable', (req, res) => {
     try {
         const { key } = req.body;
@@ -92,18 +87,11 @@ app.post('/license/disable', (req, res) => {
             return res.status(400).json({ status: 'error', message: 'Chave não informada.' });
         }
 
-        const licenseData = licenses.get(key);
-        
-        if (!licenseData) {
-            return res.status(404).json({ status: 'error', message: 'Chave não encontrada.' });
-        }
-
         licenses.delete(key);
-        deviceDatabase.delete(key); // Limpa também do banco de dispositivos
 
         return res.status(200).json({
             status: 'success',
-            message: 'Chave desativada e removida com sucesso!',
+            message: 'Chave desativada com sucesso!',
             key
         });
     } catch (error) {
@@ -111,17 +99,13 @@ app.post('/license/disable', (req, res) => {
     }
 });
 
-// VALIDAR E SALVAR O ID DO DISPOSITIVO AUTOMATICAMENTE
+// 4. VALIDAÇÃO PURA POR CHAVE (Sem exigir Device ID)
 app.post('/license/validate', (req, res) => {
     try {
-        const { key, deviceId } = req.body;
+        const { key } = req.body;
 
         if (!key) {
             return res.status(400).json({ status: 'error', message: 'Chave não informada.' });
-        }
-
-        if (!deviceId) {
-            return res.status(400).json({ status: 'error', message: 'Device ID não informado.' });
         }
 
         const licenseData = licenses.get(key);
@@ -136,29 +120,13 @@ app.post('/license/validate', (req, res) => {
 
         if (Date.now() > licenseData.expiresAt) {
             licenses.delete(key);
-            deviceDatabase.delete(key);
             return res.status(400).json({ status: 'error', message: 'Esta chave expirou!' });
-        }
-
-        // SALVAMENTO AUTOMÁTICO NO BANCO DE DISPOSITIVOS:
-        const registeredDevice = deviceDatabase.get(key);
-
-        if (!registeredDevice) {
-            // Se a chave ainda não tem nenhum aparelho vinculado, salva o ID do celular atual na hora!
-            deviceDatabase.set(key, deviceId);
-        } else if (registeredDevice !== deviceId) {
-            // Se outra pessoa tentar usar com outro celular, o servidor bloqueia
-            return res.status(400).json({ 
-                status: 'error', 
-                message: 'Esta chave já está vinculada a outro dispositivo!' 
-            });
         }
 
         return res.status(200).json({
             status: 'success',
-            message: 'Licença válida e dispositivo salvo com sucesso!',
-            expiresAt: licenseData.expiresAt,
-            deviceId: deviceDatabase.get(key)
+            message: 'Acesso liberado!',
+            expiresAt: licenseData.expiresAt
         });
 
     } catch (error) {
