@@ -3,14 +3,15 @@ const app = express();
 
 app.use(express.json());
 
-// Banco de dados em memória principal (armazena as chaves, relógio, pausa e deviceId)
+// Banco de dados em memória do servidor (armazena chaves, relógio, pausa e deviceId)
 const licenses = new Map();
 
+// Rota raiz
 app.get('/', (req, res) => {
-    res.status(200).json({ status: 'online', message: 'API rodando!' });
+    res.status(200).json({ status: 'online', message: 'API de Licenças rodando!' });
 });
 
-// 1. GERAR KEY (Com suporte a dias, horas, minutos, segundos e relógio interno)
+// 1. GERAR KEY (Com relógio para dias, horas, minutos, segundos)
 app.post('/license/create', (req, res) => {
     try {
         const { key, tempo, tipo, dias } = req.body;
@@ -37,7 +38,7 @@ app.post('/license/create', (req, res) => {
 
         licenses.set(key, {
             expiresAt,
-            deviceId: null, // Banco de dados do dispositivo vinculado
+            deviceId: null, // Salva o deviceId do usuário automaticamente no primeiro login
             paused: false
         });
 
@@ -111,7 +112,7 @@ app.post('/license/disable', (req, res) => {
     }
 });
 
-// 4. VALIDAR KEY (Banco de dados de dispositivos: 1 Key = 1 Aparelho + Relógio de Expiração)
+// 4. VALIDAR KEY (Salva o deviceId automaticamente e trava 1 Key para 1 Aparelho)
 app.post('/license/validate', (req, res) => {
     try {
         const { key, deviceId } = req.body;
@@ -139,7 +140,7 @@ app.post('/license/validate', (req, res) => {
             return res.status(400).json({ status: 'error', message: 'Esta chave expirou!' });
         }
 
-        // Banco de dados de dispositivo: Vincula o primeiro e bloqueia o segundo
+        // Salvamento automático do dispositivo: Vincula o primeiro aparelho que logar e trava permanentemente
         if (!licenseData.deviceId) {
             licenseData.deviceId = deviceId;
         } else if (licenseData.deviceId !== deviceId) {
@@ -151,7 +152,7 @@ app.post('/license/validate', (req, res) => {
 
         return res.status(200).json({
             status: 'success',
-            message: 'Licença válida e dispositivo vinculado!',
+            message: 'Licença válida e dispositivo vinculado com sucesso!',
             expiresAt: licenseData.expiresAt,
             deviceId: licenseData.deviceId
         });
