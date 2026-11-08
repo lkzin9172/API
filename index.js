@@ -3,15 +3,14 @@ const app = express();
 
 app.use(express.json());
 
-// Banco de dados em memória do servidor (armazena key, expiresAt, deviceId e paused)
+// Banco de dados em memória principal (armazena as chaves, relógio, pausa e deviceId)
 const licenses = new Map();
 
-// Rota raiz para teste de status
 app.get('/', (req, res) => {
-    res.status(200).json({ status: 'online', message: 'API de Licenças rodando perfeitamente!' });
+    res.status(200).json({ status: 'online', message: 'API rodando!' });
 });
 
-// 1. ROTA DE GERAR KEY (Suporte a segundos, minutos, horas e dias)
+// 1. GERAR KEY (Com suporte a dias, horas, minutos, segundos e relógio interno)
 app.post('/license/create', (req, res) => {
     try {
         const { key, tempo, tipo, dias } = req.body;
@@ -24,23 +23,22 @@ app.post('/license/create', (req, res) => {
         const qtd = parseFloat(tempo) || parseFloat(dias) || 1;
         const t = (tipo || '').toLowerCase().trim();
 
-        // Cálculo exato de tempo em milissegundos
         if (t.includes('min') || t === 'm') {
-            milissegundos = qtd * 60 * 1000; // Minutos
+            milissegundos = qtd * 60 * 1000;
         } else if (t.includes('hor') || t === 'h' || t.includes('hora')) {
-            milissegundos = qtd * 60 * 60 * 1000; // Horas
+            milissegundos = qtd * 60 * 60 * 1000;
         } else if (t.includes('seg') || t === 's') {
-            milissegundos = qtd * 1000; // Segundos (ótimo para testes rápidos)
+            milissegundos = qtd * 1000;
         } else {
-            milissegundos = qtd * 24 * 60 * 60 * 1000; // Dias (padrão)
+            milissegundos = qtd * 24 * 60 * 60 * 1000;
         }
 
         const expiresAt = Date.now() + milissegundos;
 
         licenses.set(key, {
             expiresAt,
-            deviceId: null, // Banco de dados do dispositivo começa livre
-            paused: false   // Chave começa ativa
+            deviceId: null, // Banco de dados do dispositivo vinculado
+            paused: false
         });
 
         return res.status(200).json({
@@ -51,12 +49,12 @@ app.post('/license/create', (req, res) => {
             expiraEm: `${qtd} ${tipo || 'dias'}`
         });
     } catch (error) {
-        console.error('Erro ao criar chave:', error);
+        console.error('Erro ao criar:', error);
         return res.status(500).json({ status: 'error', message: 'Erro interno ao criar chave' });
     }
 });
 
-// 2. ROTA DE PAUSAR / DESPAUSAR KEY
+// 2. PAUSAR / DESPAUSAR KEY
 app.post('/license/toggle', (req, res) => {
     try {
         const { key, paused } = req.body;
@@ -68,24 +66,24 @@ app.post('/license/toggle', (req, res) => {
         const licenseData = licenses.get(key);
         
         if (!licenseData) {
-            return res.status(404).json({ status: 'error', message: 'Chave inválida ou não encontrada.' });
+            return res.status(404).json({ status: 'error', message: 'Chave não encontrada.' });
         }
 
         licenseData.paused = paused !== undefined ? paused : !licenseData.paused;
 
         return res.status(200).json({
             status: 'success',
-            message: licenseData.paused ? 'Chave pausada com sucesso!' : 'Chave despausada com sucesso!',
+            message: licenseData.paused ? 'Chave pausada!' : 'Chave despausada!',
             key,
             paused: licenseData.paused
         });
     } catch (error) {
-        console.error('Erro ao pausar chave:', error);
+        console.error('Erro ao pausar:', error);
         return res.status(500).json({ status: 'error', message: 'Erro interno.' });
     }
 });
 
-// 3. ROTA DE DESATIVAR / REMOVER KEY
+// 3. DESATIVAR / REMOVER KEY
 app.post('/license/disable', (req, res) => {
     try {
         const { key } = req.body;
@@ -97,7 +95,7 @@ app.post('/license/disable', (req, res) => {
         const licenseData = licenses.get(key);
         
         if (!licenseData) {
-            return res.status(404).json({ status: 'error', message: 'Chave inválida ou já desativada.' });
+            return res.status(404).json({ status: 'error', message: 'Chave não encontrada.' });
         }
 
         licenses.delete(key);
@@ -108,12 +106,12 @@ app.post('/license/disable', (req, res) => {
             key
         });
     } catch (error) {
-        console.error('Erro ao desativar chave:', error);
+        console.error('Erro ao desativar:', error);
         return res.status(500).json({ status: 'error', message: 'Erro interno.' });
     }
 });
 
-// 4. ROTA DE VALIDAÇÃO (Relógio de Expiração + Banco de Dados de Dispositivos 1 para 1)
+// 4. VALIDAR KEY (Banco de dados de dispositivos: 1 Key = 1 Aparelho + Relógio de Expiração)
 app.post('/license/validate', (req, res) => {
     try {
         const { key, deviceId } = req.body;
@@ -129,26 +127,22 @@ app.post('/license/validate', (req, res) => {
         const licenseData = licenses.get(key);
         
         if (!licenseData) {
-            return res.status(404).json({ status: 'error', message: 'Chave inválida, expirada ou não encontrada.' });
+            return res.status(404).json({ status: 'error', message: 'Chave inválida ou não encontrada.' });
         }
 
-        // Verifica se a chave foi pausada manualmente
         if (licenseData.paused) {
-            return res.status(400).json({ status: 'error', message: 'Esta chave está pausada no momento!' });
+            return res.status(400).json({ status: 'error', message: 'Esta chave está pausada!' });
         }
 
-        // Relógio de Expiração: Se passou do tempo, deleta a key e barra o acesso
         if (Date.now() > licenseData.expiresAt) {
             licenses.delete(key);
-            return res.status(400).json({ status: 'error', message: 'Esta chave expirou e foi desativada!' });
+            return res.status(400).json({ status: 'error', message: 'Esta chave expirou!' });
         }
 
-        // Banco de Dados de Dispositivos: 1 Key = 1 Aparelho fixo
+        // Banco de dados de dispositivo: Vincula o primeiro e bloqueia o segundo
         if (!licenseData.deviceId) {
-            // Se tá livre, vincula o primeiro aparelho que usou
             licenseData.deviceId = deviceId;
         } else if (licenseData.deviceId !== deviceId) {
-            // Se um segundo aparelho tentar usar a mesma key, bloqueia na hora!
             return res.status(400).json({ 
                 status: 'error', 
                 message: 'Esta chave já está vinculada a outro dispositivo!' 
@@ -168,9 +162,8 @@ app.post('/license/validate', (req, res) => {
     }
 });
 
-// Proteção contra crash global
 process.on('uncaughtException', (err) => {
-    console.error('Erro não tratado:', err);
+    console.error('Erro:', err);
 });
 
 const PORT = process.env.PORT || 8080;
