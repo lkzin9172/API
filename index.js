@@ -3,8 +3,7 @@ const app = express();
 
 app.use(express.json());
 
-// Banco de dados simulado em memória (ou substitua pela sua conexão com banco)
-// Armazena as chaves ativas e o deviceId vinculado
+// Armazena as chaves: key -> { expiresAt, deviceId }
 const licenses = new Map();
 
 // Rota de teste raiz
@@ -12,28 +11,41 @@ app.get('/', (req, res) => {
     res.status(200).json({ status: 'online', message: 'API rodando perfeitamente!' });
 });
 
-// Rota para criar/gerar nova chave (caso você use para gerenciar)
+// Rota para criar a chave com suporte a minutos, horas ou dias
 app.post('/license/create', (req, res) => {
     try {
-        const { key, dias } = req.body;
+        const { key, tempo, tipo } = req.body;
         
         if (!key) {
-            return res.status(400).json({ status: 'error', message: 'A chave (key) é obrigatória.' });
+            return res.status(400).json({ status: 'error', message: 'A chave é obrigatória.' });
         }
 
-        const diasValidade = dias ? parseInt(dias) : 1;
-        const expiresAt = Date.now() + (diasValidade * 24 * 60 * 60 * 1000);
+        const quantidade = parseFloat(tempo) || 1;
+        let milissegundos = 0;
+
+        // Define o tempo com base no tipo informado (minuto, hora ou dia)
+        if (tipo === 'minuto' || tipo === 'minutos' || tipo === 'm') {
+            milissegundos = quantidade * 60 * 1000;
+        } else if (tipo === 'hora' || tipo === 'horas' || tipo === 'h') {
+            milissegundos = quantidade * 60 * 60 * 1000;
+        } else {
+            // Padrão é dias (compatível com o que você estava testando)
+            milissegundos = quantidade * 24 * 60 * 60 * 1000;
+        }
+
+        const expiresAt = Date.now() + milissegundos;
 
         licenses.set(key, {
             expiresAt,
-            deviceId: null // Será vinculado no primeiro login/ativação
+            deviceId: null
         });
 
         return res.status(200).json({
             status: 'success',
-            message: 'Chave criada com sucesso',
+            message: 'Chave criada com sucesso!',
             key,
-            expiresAt
+            expiresAt,
+            expiraEmMinutos: (milissegundos / 60000).toFixed(1)
         });
     } catch (error) {
         console.error('Erro ao criar chave:', error);
@@ -41,7 +53,7 @@ app.post('/license/create', (req, res) => {
     }
 });
 
-// Rota de validação da chave e do dispositivo (para liberar a segunda tela)
+// Rota de validação que verifica rigorosamente se expirou
 app.post('/license/validate', (req, res) => {
     try {
         const { key, deviceId } = req.body;
@@ -50,50 +62,46 @@ app.post('/license/validate', (req, res) => {
             return res.status(400).json({ status: 'error', message: 'Chave não informada.' });
         }
 
-        // Verifica se a chave existe no sistema
         const licenseData = licenses.get(key);
+        
+        // Verifica se a chave existe
         if (!licenseData) {
             return res.status(404).json({ status: 'error', message: 'Chave inválida ou não encontrada.' });
         }
 
-        // Verifica se a chave expirou
+        // VERIFICAÇÃO DE EXPIRAÇÃO: Compara o horário atual com o momento que ela vence
         if (Date.now() > licenseData.expiresAt) {
-            return res.status(400).json({ status: 'error', message: 'Chave expirada.' });
+            // Remove a chave expirada da memória
+            licenses.delete(key);
+            return res.status(400).json({ status: 'error', message: 'Esta chave expirou!' });
         }
 
-        // Vincula o deviceId se ainda não estiver vinculado
+        // Vincula o deviceId se necessário
         if (!licenseData.deviceId && deviceId) {
             licenseData.deviceId = deviceId;
         }
 
-        // Se o deviceId enviado for diferente do vinculado, bloqueia (opcional, para segurança)
         if (licenseData.deviceId && deviceId && licenseData.deviceId !== deviceId) {
-            return res.status(400).json({ status: 'error', message: 'Esta chave já está vinculada a outro dispositivo.' });
+            return res.status(400).json({ status: 'error', message: 'Chave vinculada a outro aparelho.' });
         }
 
-        // Sucesso: chave válida, libera a segunda tela
         return res.status(200).json({
             status: 'success',
-            message: 'Licença validada com sucesso!',
+            message: 'Licença válida e ativa!',
             expiresAt: licenseData.expiresAt
         });
 
-    } catch (error) {
+    } data_error => {
         console.error('Erro na validação:', error);
-        return res.status(500).json({ status: 'error', message: 'Erro interno no servidor ao validar.' });
+        return res.status(500).json({ status: 'error', message: 'Erro interno no servidor.' });
     }
 });
 
-// Captura de erros globais para o servidor nunca dar crash (502)
+// Proteção contra crash
 process.on('uncaughtException', (err) => {
     console.error('Erro não tratado:', err);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Rejeição não tratada:', reason);
-});
-
-// Porta dinâmica do Railway ou padrão 8080 que você configurou
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Servidor rodando na porta ${PORT}`);
